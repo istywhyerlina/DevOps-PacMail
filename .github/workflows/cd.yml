@@ -1,0 +1,52 @@
+name: Deploy Staging 🚀
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute deployment command
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_PATH_DEPLOY: ${{ vars.APP_PATH_DEPLOY }}
+          GIT_URL: ${{ secrets.GIT_URL }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+
+
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: APP_PATH_DEPLOY, GIT_URL, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+          script: |
+
+            if [[ -d "/home/ubuntu/${APP_PATH_DEPLOY}" ]]; then 
+              cd /home/ubuntu/$APP_PATH_DEPLOY
+              sudo docker compose down
+              git pull --rebase
+            else
+              ssh-keyscan github.com > ~/.ssh/known_hosts
+              git clone $GIT_URL /home/ubuntu/$APP_PATH_DEPLOY
+              cd /home/ubuntu/$APP_PATH_DEPLOY
+            fi
+
+            # If there are any envars update
+            echo "POSTGRES_USER=$POSTGRES_USER" > .env
+            echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> .env
+            echo "POSTGRES_DB=$POSTGRES_DB" >> .env
+
+
+            # Run app
+            sudo docker compose up --build --detach
+      
+      - name: Hit Endpoint
+        run: |
+          sleep 20
+          curl ${{ secrets.DEPLOY_URL }}
